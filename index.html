@@ -43,7 +43,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <script>
-        // 1. 아래에 본인의 Firebase 프로젝트 설정값을 붙여넣으세요!
+        // 1. 여기에 본인의 Firebase 설정값을 다시 넣어주세요! (databaseURL 필수 확인)
         const firebaseConfig = {
             apiKey: "AIzaSyAXv0MNJ0d2wmhmdtNmjVi8zJddvRWtNmQ",
             authDomain: "test-1eccc.firebaseapp.com",
@@ -54,46 +54,60 @@
             appId: "1:20655092545:web:01e13a5a1e3bc404b2a7c0"
         };
 
-        // Firebase 초기화
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const sessionRef = db.ref('votingSession');
 
-        let hasVoted = false; // 내 스마트폰에서의 투표 여부
+        let currentRoundId = 0; // 현재 서버의 투표 라운드 번호
+        let hasVoted = false;   // 내 투표 여부
 
-        // 2. 실시간 데이터 감지 (누군가 투표하거나 초기화할 때마다 모든 접속자에게 동시에 실행됨)
+        // 2. 실시간 데이터 감지 및 상태 동기화
         sessionRef.on('value', (snapshot) => {
-            const data = snapshot.val() || { votesA: 0, votesB: 0, total: 0 };
+            let data = snapshot.val();
             
+            // 최초 접속 시 DB가 아예 비어있을 경우를 대비한 가상 데이터
+            if (!data) {
+                data = { votesA: 0, votesB: 0, total: 0, roundId: 1 };
+            }
+
+            currentRoundId = data.roundId;
+
+            // [핵심 로직] 내 브라우저에 저장된 도장(라운드 번호)과 서버의 번호를 비교
+            const myVotedRound = localStorage.getItem('votedRound');
+            if (myVotedRound == currentRoundId) {
+                hasVoted = true;  // 번호가 같으면 이번 라운드에 이미 투표한 것!
+            } else {
+                hasVoted = false; // 번호가 다르면 새로운 라운드이므로 투표권 부활!
+            }
+
             document.getElementById('vote-count').innerText = data.total;
 
             if (data.total >= 7) {
-                // 7표 달성 시 결과 화면 표시
                 showResult(data.votesA, data.votesB);
             } else {
-                // 7표 미만일 때 화면 처리
                 document.getElementById('result-screen').classList.remove('active');
                 if (hasVoted) {
-                    // 나는 투표를 했으면 대기 화면
                     document.getElementById('vote-screen').classList.remove('active');
                     document.getElementById('waiting-screen').classList.add('active');
                 } else {
-                    // 투표 안 했으면 투표 화면 (리셋되었을 때 여기로 옴)
+                    // 모두가 일제히 첫 화면으로 돌아오게 만드는 마법의 구간
                     document.getElementById('waiting-screen').classList.remove('active');
                     document.getElementById('vote-screen').classList.add('active');
                 }
             }
         });
 
-        // 3. 투표하기 (버튼 클릭 시)
+        // 3. 투표하기
         function castVote(choice) {
             if (hasVoted) return; 
+            
+            // 투표 즉시 내 폰 깊숙한 곳에 현재 라운드 번호 도장을 찍음 (새로고침해도 유지됨)
             hasVoted = true;
+            localStorage.setItem('votedRound', currentRoundId);
 
-            // 트랜잭션: 여러 명이 0.1초 차이로 동시에 눌러도 표가 씹히지 않게 안전하게 더해줌
             sessionRef.transaction((currentData) => {
                 if (currentData === null) {
-                    currentData = { votesA: 0, votesB: 0, total: 0 };
+                    currentData = { votesA: 0, votesB: 0, total: 0, roundId: Date.now() };
                 }
                 if (choice === 'A') currentData.votesA++;
                 if (choice === 'B') currentData.votesB++;
@@ -127,10 +141,9 @@
 
         // 5. 초기화 (결과 화면 클릭 시)
         function resetToStart() {
-            // DB를 0으로 초기화하면 sessionRef.on('value')가 작동하여 
-            // 현재 접속해 있는 모든 사람의 화면이 일제히 첫 투표 화면으로 돌아갑니다.
-            sessionRef.set({ votesA: 0, votesB: 0, total: 0 });
-            hasVoted = false; 
+            // 데이터를 0으로 만들면서, 라운드 번호를 현재 시간(Date.now)으로 완전히 새로 발급!
+            // 이 순간 접속해 있는 모든 폰의 myVotedRound와 불일치하게 되어 일제히 첫 화면으로 넘어감.
+            sessionRef.set({ votesA: 0, votesB: 0, total: 0, roundId: Date.now() });
         }
     </script>
 </body>
