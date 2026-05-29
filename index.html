@@ -15,6 +15,9 @@
         #btn-a { background-color: #ff4d4d; } 
         #btn-b { background-color: #4da6ff; } 
         
+        /* 비활성화(얼어붙은) 버튼 디자인 추가 */
+        .vote-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
         /* 대기 화면 */
         #waiting-screen { background-color: #f5f5f5; font-size: 2rem; color: #333; }
         
@@ -31,6 +34,7 @@
             font-weight: bold;
         }
         .cancel-btn:hover { background-color: #eee; }
+        .cancel-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* 결과 화면 */
         #result-screen { color: white; cursor: pointer; }
@@ -50,7 +54,7 @@
             대기중...<br>
             <span style="font-size: 1.2rem; color: #666;">(현재 <span id="vote-count">0</span> / 7 표)</span>
         </div>
-        <button class="cancel-btn" onclick="cancelVote()">투표 취소</button>
+        <button id="btn-cancel" class="cancel-btn" onclick="cancelVote()">투표 취소</button>
     </div>
 
     <div id="result-screen" class="screen" onclick="resetToStart()">
@@ -62,6 +66,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <script>
+        // 요청하신 고정 설정값
         const firebaseConfig = {
             apiKey: "AIzaSyAXv0MNJ0d2wmhmdtNmjVi8zJddvRWtNmQ",
             authDomain: "test-1eccc.firebaseapp.com",
@@ -78,6 +83,9 @@
 
         let currentRoundId = 0; 
         let hasVoted = false;   
+        
+        // 🔒 광클 방지용 자물쇠 변수 추가
+        let isProcessing = false; 
 
         // 서버 데이터 실시간 감지
         sessionRef.on('value', (snapshot) => {
@@ -105,22 +113,37 @@
                 if (hasVoted) {
                     document.getElementById('vote-screen').classList.remove('active');
                     document.getElementById('waiting-screen').classList.add('active');
+                    
+                    // 대기 화면에 왔으니 취소 버튼 자물쇠 풀기
+                    document.getElementById('btn-cancel').disabled = false;
                 } else {
                     document.getElementById('waiting-screen').classList.remove('active');
                     document.getElementById('vote-screen').classList.add('active');
+                    
+                    // 다시 투표 화면으로 돌아왔으니 투표 버튼 자물쇠 풀기
+                    document.getElementById('btn-a').disabled = false;
+                    document.getElementById('btn-b').disabled = false;
                 }
             }
+            
+            // 서버 통신이 완료되었으므로 자물쇠 해제
+            isProcessing = false; 
         });
 
         // 투표하기
         function castVote(choice) {
-            if (hasVoted) return; 
+            // 이미 투표했거나 자물쇠가 잠겨있으면 클릭 무시 (광클 방어 1단계)
+            if (hasVoted || isProcessing) return; 
             
+            // 누르는 즉시 자물쇠 잠그기 (광클 방어 2단계)
+            isProcessing = true;
+            document.getElementById('btn-a').disabled = true;
+            document.getElementById('btn-b').disabled = true;
+
             hasVoted = true;
             localStorage.setItem('votedRound', currentRoundId);
             localStorage.setItem('myChoice', choice);
 
-            // 누르자마자 즉시 대기 화면으로 전환 (UX 향상)
             document.getElementById('vote-screen').classList.remove('active');
             document.getElementById('waiting-screen').classList.add('active');
 
@@ -138,7 +161,12 @@
 
         // 투표 취소하기
         function cancelVote() {
-            if (!hasVoted) return;
+            // 자물쇠가 잠겨있으면 클릭 무시 (광클 방어)
+            if (!hasVoted || isProcessing) return;
+
+            // 누르는 즉시 자물쇠 잠그기 및 취소 버튼 비활성화
+            isProcessing = true;
+            document.getElementById('btn-cancel').disabled = true;
 
             const myChoice = localStorage.getItem('myChoice'); 
 
@@ -146,7 +174,6 @@
             localStorage.removeItem('votedRound');
             localStorage.removeItem('myChoice');
 
-            // 누르자마자 즉시 투표 화면으로 다시 전환 (답답함 해결)
             document.getElementById('waiting-screen').classList.remove('active');
             document.getElementById('vote-screen').classList.add('active');
 
