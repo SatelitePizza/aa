@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>투표 관리자 마스터 페이지</title>
+    <style>
+        body { font-family: sans-serif; background-color: #222; color: white; text-align: center; padding: 50px; }
+        #admin-panel { display: none; /* 처음엔 숨겨둠 */ }
+        .danger-btn {
+            background-color: #ff4d4d; color: white; border: none; padding: 20px 40px;
+            font-size: 1.5rem; font-weight: bold; border-radius: 10px; cursor: pointer; margin-top: 30px;
+        }
+        .danger-btn:hover { background-color: #cc0000; }
+        .status { margin-top: 30px; font-size: 1.2rem; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <div id="admin-panel">
+        <h1>🛠️ 투표 마스터 컨트롤</h1>
+        <p>이 버튼을 누르면 현재 접속 중인 모든 사람의 화면이 강제로 첫 투표 화면으로 돌아갑니다.</p>
+        
+        <button class="danger-btn" onclick="forceReset()">전체 초기화 (강제 리셋)</button>
+
+        <div class="status">
+            현재 투표수: <span id="current-total" style="color: white; font-weight: bold;">0</span> 표
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <script>
+        // 1. 관리자 비밀번호 설정 (원하는 비밀번호로 바꾸세요!)
+        const ADMIN_PASSWORD = "9256";
+
+        // 2. 페이지 접속 시 비밀번호 확인
+        const userInput = prompt("관리자 비밀번호를 입력하세요:");
+        if (userInput === ADMIN_PASSWORD) {
+            // 비밀번호가 맞으면 숨겨둔 관리자 패널을 보여줌
+            document.getElementById('admin-panel').style.display = 'block';
+        } else {
+            // 틀리면 경고 후 튕겨냄
+            alert("접근 권한이 없습니다.");
+            window.location.href = "index.html"; // 일반 투표 화면으로 쫓아냄
+        }
+
+        // 3. 파이어베이스 설정 (주신 값 그대로 적용)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAXv0MNJ0d2wmhmdtNmjVi8zJddvRWtNmQ",
+            authDomain: "test-1eccc.firebaseapp.com",
+            databaseURL: "https://test-1eccc-default-rtdb.asia-southeast1.firebasedatabase.app/",
+            projectId: "test-1eccc",
+            storageBucket: "test-1eccc.firebasestorage.app",
+            messagingSenderId: "20655092545",
+            appId: "1:20655092545:web:01e13a5a1e3bc404b2a7c0"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const sessionRef = db.ref('votingSession');
+
+        // 현재 투표수 실시간 모니터링 (관리자 참고용)
+        sessionRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                document.getElementById('current-total').innerText = data.total;
+            }
+        });
+
+        // 4. 강제 리셋 함수 (마스터 버튼)
+        function forceReset() {
+            if (confirm("정말로 모든 투표를 초기화하시겠습니까?")) {
+                // 데이터를 0으로 날리고 새로운 라운드 아이디를 발급하여 모든 기기 강제 새로고침
+                sessionRef.set({ votesA: 0, votesB: 0, total: 0, roundId: Date.now() });
+                alert("초기화 완료! 모든 사용자의 화면이 첫 화면으로 돌아갔습니다.");
+            }
+        }
+    </script>
+</body>
+</html>
