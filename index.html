@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>경주 노래 월드컵-투표용</title>
+    <title>실시간 A/B 투표</title>
     <style>
         body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; overflow: hidden; }
         .screen { display: none; height: 100%; width: 100%; text-align: center; }
@@ -42,8 +42,9 @@
 
         /* 3. 결과 화면 */
         #result-screen { color: white; cursor: pointer; }
-        #result-text { font-size: 4rem; font-weight: bold; }
-        .click-guide { font-size: 1rem; margin-top: 20px; opacity: 0.8; font-weight: normal; }
+        #result-text { font-size: 4rem; font-weight: bold; line-height: 1.2; }
+        .result-detail { font-size: 2rem; font-weight: normal; opacity: 0.9; display: block; margin-top: 10px; }
+        .click-guide { font-size: 1rem; margin-top: 30px; opacity: 0.8; font-weight: normal; }
     </style>
 </head>
 <body>
@@ -109,7 +110,6 @@
             }
         }
 
-        // 서버 데이터 실시간 감지
         sessionRef.on('value', (snapshot) => {
             let data = snapshot.val();
             
@@ -129,10 +129,7 @@
             }
 
             document.getElementById('vote-count').innerText = data.total;
-
-            // === [핵심 변경점] 상태 파악이 끝났으므로 로딩 화면을 무조건 끕니다 ===
             document.getElementById('loading-screen').classList.remove('active');
-            // =========================================================
 
             if (data.total >= 7) {
                 showResult(data.votesA, data.votesB);
@@ -156,7 +153,6 @@
             isProcessing = false; 
         });
 
-        // 투표하기
         function castVote(choice) {
             if (hasVoted || isProcessing) return; 
             
@@ -184,7 +180,6 @@
             });
         }
 
-        // 투표 취소하기
         function cancelVote() {
             if (!hasVoted || isProcessing) return;
 
@@ -211,7 +206,7 @@
             });
         }
 
-        // 결과 화면
+        // 결과 화면 - 득표수 표시 기능 추가
         function showResult(votesA, votesB) {
             document.getElementById('vote-screen').classList.remove('active');
             document.getElementById('waiting-screen').classList.remove('active');
@@ -222,18 +217,20 @@
             resultScreen.classList.add('active');
 
             if (votesA > votesB) {
-                resultText.innerText = "A 승리!";
+                // A가 이겼을 때
+                resultText.innerHTML = `A 승리!<span class="result-detail">(${votesA}표 득표)</span>`;
                 resultScreen.style.backgroundColor = "#ff4d4d"; 
             } else if (votesB > votesA) {
-                resultText.innerText = "B 승리!";
+                // B가 이겼을 때
+                resultText.innerHTML = `B 승리!<span class="result-detail">(${votesB}표 득표)</span>`;
                 resultScreen.style.backgroundColor = "#4da6ff"; 
             } else {
-                resultText.innerText = "무승부";
+                // 무승부일 때
+                resultText.innerHTML = `무승부<span class="result-detail">(${votesA} : ${votesB})</span>`;
                 resultScreen.style.backgroundColor = "#999999"; 
             }
         }
 
-        // 초기화
         function resetToStart() {
             sessionRef.set({ votesA: 0, votesB: 0, total: 0, roundId: Date.now() });
         }
