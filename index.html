@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>★경주★ 노래 월드컵</title>
+    <title>경주 노래 월드컵</title>
     <style>
         body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; overflow: hidden; }
         .screen { display: none; height: 100%; width: 100%; text-align: center; }
@@ -60,4 +60,183 @@
     <div id="waiting-screen" class="screen">
         <div id="my-choice-display">나의 선택: -</div>
         <div>
-            대
+            대기중...
+            <div class="wait-subtitle">(현재 <span id="vote-count">0</span> / 7 표)</div>
+        </div>
+        <button id="btn-cancel" class="cancel-btn" onclick="cancelVote()">투표 취소</button>
+    </div>
+
+    <div id="result-screen" class="screen" onclick="resetToStart()">
+        <div id="result-text"></div>
+        <div class="click-guide">(화면을 터치하면 처음으로 돌아갑니다)</div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAXv0MNJ0d2wmhmdtNmjVi8zJddvRWtNmQ",
+            authDomain: "test-1eccc.firebaseapp.com",
+            databaseURL: "https://test-1eccc-default-rtdb.asia-southeast1.firebasedatabase.app/",
+            projectId: "test-1eccc",
+            storageBucket: "test-1eccc.firebasestorage.app",
+            messagingSenderId: "20655092545",
+            appId: "1:20655092545:web:01e13a5a1e3bc404b2a7c0"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const sessionRef = db.ref('votingSession');
+
+        let currentRoundId = 0; 
+        let hasVoted = false;   
+        let isProcessing = false; 
+
+        function updateWaitingScreenUI(choice) {
+            const waitingScreen = document.getElementById('waiting-screen');
+            const choiceDisplay = document.getElementById('my-choice-display');
+            
+            if (choice === 'A') {
+                waitingScreen.style.backgroundColor = '#ff4d4d'; 
+                choiceDisplay.innerText = '나의 선택: A';
+            } else if (choice === 'B') {
+                waitingScreen.style.backgroundColor = '#4da6ff'; 
+                choiceDisplay.innerText = '나의 선택: B';
+            } else {
+                waitingScreen.style.backgroundColor = '#666'; 
+                choiceDisplay.innerText = '나의 선택: -';
+            }
+        }
+
+        // 서버 데이터 실시간 감지
+        sessionRef.on('value', (snapshot) => {
+            let data = snapshot.val();
+            
+            if (!data) {
+                data = { votesA: 0, votesB: 0, total: 0, roundId: 1 };
+            }
+
+            currentRoundId = data.roundId;
+
+            const myVotedRound = localStorage.getItem('votedRound');
+            const myChoice = localStorage.getItem('myChoice'); 
+
+            if (myVotedRound == currentRoundId) {
+                hasVoted = true;  
+            } else {
+                hasVoted = false; 
+            }
+
+            document.getElementById('vote-count').innerText = data.total;
+
+            // === [핵심 변경점] 상태 파악이 끝났으므로 로딩 화면을 무조건 끕니다 ===
+            document.getElementById('loading-screen').classList.remove('active');
+            // =========================================================
+
+            if (data.total >= 7) {
+                showResult(data.votesA, data.votesB);
+            } else {
+                document.getElementById('result-screen').classList.remove('active');
+                if (hasVoted) {
+                    updateWaitingScreenUI(myChoice);
+                    document.getElementById('vote-screen').classList.remove('active');
+                    document.getElementById('waiting-screen').classList.add('active');
+                    
+                    document.getElementById('btn-cancel').disabled = false;
+                } else {
+                    document.getElementById('waiting-screen').classList.remove('active');
+                    document.getElementById('vote-screen').classList.add('active');
+                    
+                    document.getElementById('btn-a').disabled = false;
+                    document.getElementById('btn-b').disabled = false;
+                }
+            }
+            
+            isProcessing = false; 
+        });
+
+        // 투표하기
+        function castVote(choice) {
+            if (hasVoted || isProcessing) return; 
+            
+            isProcessing = true;
+            document.getElementById('btn-a').disabled = true;
+            document.getElementById('btn-b').disabled = true;
+
+            hasVoted = true;
+            localStorage.setItem('votedRound', currentRoundId);
+            localStorage.setItem('myChoice', choice);
+
+            updateWaitingScreenUI(choice);
+            document.getElementById('vote-screen').classList.remove('active');
+            document.getElementById('waiting-screen').classList.add('active');
+
+            sessionRef.transaction((currentData) => {
+                if (currentData === null) {
+                    currentData = { votesA: 0, votesB: 0, total: 0, roundId: Date.now() };
+                }
+                if (choice === 'A') currentData.votesA++;
+                if (choice === 'B') currentData.votesB++;
+                currentData.total++;
+                
+                return currentData;
+            });
+        }
+
+        // 투표 취소하기
+        function cancelVote() {
+            if (!hasVoted || isProcessing) return;
+
+            isProcessing = true;
+            document.getElementById('btn-cancel').disabled = true;
+
+            const myChoice = localStorage.getItem('myChoice'); 
+
+            hasVoted = false;
+            localStorage.removeItem('votedRound');
+            localStorage.removeItem('myChoice');
+
+            document.getElementById('waiting-screen').classList.remove('active');
+            document.getElementById('vote-screen').classList.add('active');
+
+            sessionRef.transaction((currentData) => {
+                if (currentData === null) return currentData;
+                
+                if (myChoice === 'A' && currentData.votesA > 0) currentData.votesA--;
+                if (myChoice === 'B' && currentData.votesB > 0) currentData.votesB--;
+                if (currentData.total > 0) currentData.total--;
+                
+                return currentData;
+            });
+        }
+
+        // 결과 화면
+        function showResult(votesA, votesB) {
+            document.getElementById('vote-screen').classList.remove('active');
+            document.getElementById('waiting-screen').classList.remove('active');
+            
+            const resultScreen = document.getElementById('result-screen');
+            const resultText = document.getElementById('result-text');
+            
+            resultScreen.classList.add('active');
+
+            if (votesA > votesB) {
+                resultText.innerText = "A 승리!";
+                resultScreen.style.backgroundColor = "#ff4d4d"; 
+            } else if (votesB > votesA) {
+                resultText.innerText = "B 승리!";
+                resultScreen.style.backgroundColor = "#4da6ff"; 
+            } else {
+                resultText.innerText = "무승부";
+                resultScreen.style.backgroundColor = "#999999"; 
+            }
+        }
+
+        // 초기화
+        function resetToStart() {
+            sessionRef.set({ votesA: 0, votesB: 0, total: 0, roundId: Date.now() });
+        }
+    </script>
+</body>
+</html>
