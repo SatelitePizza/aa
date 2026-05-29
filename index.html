@@ -9,12 +9,30 @@
         .screen { display: none; height: 100%; width: 100%; text-align: center; }
         .active { display: flex; flex-direction: column; align-items: center; justify-content: center; }
         
+        /* 투표 화면 */
         #vote-screen.active { flex-direction: row; }
         .vote-btn { flex: 1; height: 100%; border: none; font-size: 4rem; color: white; cursor: pointer; font-weight: bold; }
         #btn-a { background-color: #ff4d4d; } 
         #btn-b { background-color: #4da6ff; } 
         
+        /* 대기 화면 */
         #waiting-screen { background-color: #f5f5f5; font-size: 2rem; color: #333; }
+        
+        /* 투표 취소 버튼 스타일 */
+        .cancel-btn {
+            margin-top: 30px;
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            color: #666;
+            background-color: white;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .cancel-btn:hover { background-color: #eee; }
+
+        /* 결과 화면 */
         #result-screen { color: white; cursor: pointer; }
         #result-text { font-size: 4rem; font-weight: bold; }
         .click-guide { font-size: 1rem; margin-top: 20px; opacity: 0.8; font-weight: normal; }
@@ -32,6 +50,7 @@
             대기중...<br>
             <span style="font-size: 1.2rem; color: #666;">(현재 <span id="vote-count">0</span> / 7 표)</span>
         </div>
+        <button class="cancel-btn" onclick="cancelVote()">투표 취소</button>
     </div>
 
     <div id="result-screen" class="screen" onclick="resetToStart()">
@@ -43,7 +62,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <script>
-        // 1. 여기에 본인의 Firebase 설정값을 다시 넣어주세요! (databaseURL 필수 확인)
+        // 요청하신 Firebase 설정값 반영
         const firebaseConfig = {
             apiKey: "AIzaSyAXv0MNJ0d2wmhmdtNmjVi8zJddvRWtNmQ",
             authDomain: "test-1eccc.firebaseapp.com",
@@ -58,26 +77,24 @@
         const db = firebase.database();
         const sessionRef = db.ref('votingSession');
 
-        let currentRoundId = 0; // 현재 서버의 투표 라운드 번호
-        let hasVoted = false;   // 내 투표 여부
+        let currentRoundId = 0; 
+        let hasVoted = false;   
 
-        // 2. 실시간 데이터 감지 및 상태 동기화
+        // 서버 데이터 실시간 감지
         sessionRef.on('value', (snapshot) => {
             let data = snapshot.val();
             
-            // 최초 접속 시 DB가 아예 비어있을 경우를 대비한 가상 데이터
             if (!data) {
                 data = { votesA: 0, votesB: 0, total: 0, roundId: 1 };
             }
 
             currentRoundId = data.roundId;
 
-            // [핵심 로직] 내 브라우저에 저장된 도장(라운드 번호)과 서버의 번호를 비교
             const myVotedRound = localStorage.getItem('votedRound');
             if (myVotedRound == currentRoundId) {
-                hasVoted = true;  // 번호가 같으면 이번 라운드에 이미 투표한 것!
+                hasVoted = true;  
             } else {
-                hasVoted = false; // 번호가 다르면 새로운 라운드이므로 투표권 부활!
+                hasVoted = false; 
             }
 
             document.getElementById('vote-count').innerText = data.total;
@@ -90,20 +107,19 @@
                     document.getElementById('vote-screen').classList.remove('active');
                     document.getElementById('waiting-screen').classList.add('active');
                 } else {
-                    // 모두가 일제히 첫 화면으로 돌아오게 만드는 마법의 구간
                     document.getElementById('waiting-screen').classList.remove('active');
                     document.getElementById('vote-screen').classList.add('active');
                 }
             }
         });
 
-        // 3. 투표하기
+        // 투표하기 함수
         function castVote(choice) {
             if (hasVoted) return; 
             
-            // 투표 즉시 내 폰 깊숙한 곳에 현재 라운드 번호 도장을 찍음 (새로고침해도 유지됨)
             hasVoted = true;
             localStorage.setItem('votedRound', currentRoundId);
+            localStorage.setItem('myChoice', choice); // 내가 무엇을 선택했는지 추가 저장
 
             sessionRef.transaction((currentData) => {
                 if (currentData === null) {
@@ -117,7 +133,31 @@
             });
         }
 
-        // 4. 결과 화면 처리
+        // 투표 취소 기능 추가
+        function cancelVote() {
+            if (!hasVoted) return;
+
+            const myChoice = localStorage.getItem('myChoice'); // 아까 저장한 내 선택지 불러오기
+
+            // 로컬(내 폰)의 투표 기록 삭제
+            hasVoted = false;
+            localStorage.removeItem('votedRound');
+            localStorage.removeItem('myChoice');
+
+            // 서버 데이터에서 내 표만 빼기 (트랜잭션)
+            sessionRef.transaction((currentData) => {
+                if (currentData === null) return currentData;
+                
+                // 표수가 0보다 클 때만 차감 (안전 장치)
+                if (myChoice === 'A' && currentData.votesA > 0) currentData.votesA--;
+                if (myChoice === 'B' && currentData.votesB > 0) currentData.votesB--;
+                if (currentData.total > 0) currentData.total--;
+                
+                return currentData;
+            });
+        }
+
+        // 결과 화면 처리
         function showResult(votesA, votesB) {
             document.getElementById('vote-screen').classList.remove('active');
             document.getElementById('waiting-screen').classList.remove('active');
@@ -139,10 +179,8 @@
             }
         }
 
-        // 5. 초기화 (결과 화면 클릭 시)
+        // 화면 초기화
         function resetToStart() {
-            // 데이터를 0으로 만들면서, 라운드 번호를 현재 시간(Date.now)으로 완전히 새로 발급!
-            // 이 순간 접속해 있는 모든 폰의 myVotedRound와 불일치하게 되어 일제히 첫 화면으로 넘어감.
             sessionRef.set({ votesA: 0, votesB: 0, total: 0, roundId: Date.now() });
         }
     </script>
