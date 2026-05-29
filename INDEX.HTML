@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 A/B 투표</title>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; overflow: hidden; }
+        .screen { display: none; height: 100%; width: 100%; text-align: center; }
+        .active { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        
+        #vote-screen.active { flex-direction: row; }
+        .vote-btn { flex: 1; height: 100%; border: none; font-size: 4rem; color: white; cursor: pointer; font-weight: bold; }
+        #btn-a { background-color: #ff4d4d; } 
+        #btn-b { background-color: #4da6ff; } 
+        
+        #waiting-screen { background-color: #f5f5f5; font-size: 2rem; color: #333; }
+        #result-screen { color: white; cursor: pointer; }
+        #result-text { font-size: 4rem; font-weight: bold; }
+        .click-guide { font-size: 1rem; margin-top: 20px; opacity: 0.8; font-weight: normal; }
+    </style>
+</head>
+<body>
+
+    <div id="vote-screen" class="screen active">
+        <button id="btn-a" class="vote-btn" onclick="castVote('A')">A</button>
+        <button id="btn-b" class="vote-btn" onclick="castVote('B')">B</button>
+    </div>
+
+    <div id="waiting-screen" class="screen">
+        <div>
+            대기중...<br>
+            <span style="font-size: 1.2rem; color: #666;">(현재 <span id="vote-count">0</span> / 7 표)</span>
+        </div>
+    </div>
+
+    <div id="result-screen" class="screen" onclick="resetToStart()">
+        <div id="result-text"></div>
+        <div class="click-guide">(화면을 터치하면 처음으로 돌아갑니다)</div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <script>
+        // 1. 아래에 본인의 Firebase 프로젝트 설정값을 붙여넣으세요!
+        const firebaseConfig = {
+            apiKey: "AIzaSyAXv0MNJ0d2wmhmdtNmjVi8zJddvRWtNmQ",
+            authDomain: "test-1eccc.firebaseapp.com",
+            projectId: "test-1eccc",
+            storageBucket: "test-1eccc.firebasestorage.app",
+            messagingSenderId: "20655092545",
+            appId: "1:20655092545:web:01e13a5a1e3bc404b2a7c0"
+        };
+
+        // Firebase 초기화
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const sessionRef = db.ref('votingSession');
+
+        let hasVoted = false; // 내 스마트폰에서의 투표 여부
+
+        // 2. 실시간 데이터 감지 (누군가 투표하거나 초기화할 때마다 모든 접속자에게 동시에 실행됨)
+        sessionRef.on('value', (snapshot) => {
+            const data = snapshot.val() || { votesA: 0, votesB: 0, total: 0 };
+            
+            document.getElementById('vote-count').innerText = data.total;
+
+            if (data.total >= 7) {
+                // 7표 달성 시 결과 화면 표시
+                showResult(data.votesA, data.votesB);
+            } else {
+                // 7표 미만일 때 화면 처리
+                document.getElementById('result-screen').classList.remove('active');
+                if (hasVoted) {
+                    // 나는 투표를 했으면 대기 화면
+                    document.getElementById('vote-screen').classList.remove('active');
+                    document.getElementById('waiting-screen').classList.add('active');
+                } else {
+                    // 투표 안 했으면 투표 화면 (리셋되었을 때 여기로 옴)
+                    document.getElementById('waiting-screen').classList.remove('active');
+                    document.getElementById('vote-screen').classList.add('active');
+                }
+            }
+        });
+
+        // 3. 투표하기 (버튼 클릭 시)
+        function castVote(choice) {
+            if (hasVoted) return; 
+            hasVoted = true;
+
+            // 트랜잭션: 여러 명이 0.1초 차이로 동시에 눌러도 표가 씹히지 않게 안전하게 더해줌
+            sessionRef.transaction((currentData) => {
+                if (currentData === null) {
+                    currentData = { votesA: 0, votesB: 0, total: 0 };
+                }
+                if (choice === 'A') currentData.votesA++;
+                if (choice === 'B') currentData.votesB++;
+                currentData.total++;
+                
+                return currentData;
+            });
+        }
+
+        // 4. 결과 화면 처리
+        function showResult(votesA, votesB) {
+            document.getElementById('vote-screen').classList.remove('active');
+            document.getElementById('waiting-screen').classList.remove('active');
+            
+            const resultScreen = document.getElementById('result-screen');
+            const resultText = document.getElementById('result-text');
+            
+            resultScreen.classList.add('active');
+
+            if (votesA > votesB) {
+                resultText.innerText = "A 승리!";
+                resultScreen.style.backgroundColor = "#ff4d4d"; 
+            } else if (votesB > votesA) {
+                resultText.innerText = "B 승리!";
+                resultScreen.style.backgroundColor = "#4da6ff"; 
+            } else {
+                resultText.innerText = "무승부";
+                resultScreen.style.backgroundColor = "#999999"; 
+            }
+        }
+
+        // 5. 초기화 (결과 화면 클릭 시)
+        function resetToStart() {
+            // DB를 0으로 초기화하면 sessionRef.on('value')가 작동하여 
+            // 현재 접속해 있는 모든 사람의 화면이 일제히 첫 투표 화면으로 돌아갑니다.
+            sessionRef.set({ votesA: 0, votesB: 0, total: 0 });
+            hasVoted = false; 
+        }
+    </script>
+</body>
+</html>
