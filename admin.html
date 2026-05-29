@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>투표 관리자 페이지</title>
+    <title>투표 관리자 마스터 페이지</title>
     <style>
         body { font-family: sans-serif; background-color: #222; color: white; text-align: center; padding: 50px; }
         #admin-panel { display: none; /* 처음엔 숨겨둠 */ }
@@ -75,6 +75,26 @@
             if (data) {
                 document.getElementById('current-total').innerText = data.total;
             }
+        });
+
+        // 강제 결과 공개 (조기 종료)
+        function forceShowResult() {
+            if (confirm("아직 7표가 다 차지 않았습니다. 이대로 결과를 모든 사람에게 공개하시겠습니까?")) {
+                sessionRef.update({ total: 7 });
+                alert("결과 공개 완료! 모든 사용자의 화면이 결과창으로 넘어갑니다.");
+            }
+        }
+
+        // 강제 리셋
+        function forceReset() {
+            if (confirm("정말로 모든 투표를 초기화하시겠습니까?")) {
+                sessionRef.set({ votesA: 0, votesB: 0, total: 0, roundId: Date.now() });
+                alert("초기화 완료! 모든 사용자의 화면이 첫 화면으로 돌아갔습니다.");
+            }
+        }
+    </script>
+</body>
+</html>
         });
 
         // 강제 결과 공개 (조기 종료)
