@@ -14,26 +14,29 @@
         .vote-btn { flex: 1; height: 100%; border: none; font-size: 4rem; color: white; cursor: pointer; font-weight: bold; }
         #btn-a { background-color: #ff4d4d; } 
         #btn-b { background-color: #4da6ff; } 
-        
-        /* 비활성화(얼어붙은) 버튼 디자인 추가 */
         .vote-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* 대기 화면 */
-        #waiting-screen { background-color: #f5f5f5; font-size: 2rem; color: #333; }
+        /* 대기 화면 - 배경색이 동적으로 변함 */
+        #waiting-screen { font-size: 2rem; color: white; transition: background-color 0.3s; }
+        .wait-subtitle { font-size: 1.2rem; margin-top: 15px; opacity: 0.9; }
         
-        /* 투표 취소 버튼 스타일 */
+        /* 나의 선택 강조 텍스트 */
+        #my-choice-display { font-size: 3.5rem; font-weight: bold; margin-bottom: 20px; }
+        
+        /* 투표 취소 버튼 스타일 (유색 배경에 어울리게 변경) */
         .cancel-btn {
-            margin-top: 30px;
-            padding: 10px 20px;
+            margin-top: 40px;
+            padding: 12px 24px;
             font-size: 1.2rem;
-            color: #666;
+            color: #333;
             background-color: white;
-            border: 2px solid #ccc;
+            border: none;
             border-radius: 8px;
             cursor: pointer;
             font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .cancel-btn:hover { background-color: #eee; }
+        .cancel-btn:hover { background-color: #f0f0f0; }
         .cancel-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* 결과 화면 */
@@ -44,19 +47,23 @@
 </head>
 <body>
 
+    <!-- 1. 투표 화면 -->
     <div id="vote-screen" class="screen active">
         <button id="btn-a" class="vote-btn" onclick="castVote('A')">A</button>
         <button id="btn-b" class="vote-btn" onclick="castVote('B')">B</button>
     </div>
 
+    <!-- 2. 대기 화면 -->
     <div id="waiting-screen" class="screen">
+        <div id="my-choice-display">나의 선택: -</div>
         <div>
-            대기중...<br>
-            <span style="font-size: 1.2rem; color: #666;">(현재 <span id="vote-count">0</span> / 7 표)</span>
+            대기중...
+            <div class="wait-subtitle">(현재 <span id="vote-count">0</span> / 7 표)</div>
         </div>
         <button id="btn-cancel" class="cancel-btn" onclick="cancelVote()">투표 취소</button>
     </div>
 
+    <!-- 3. 결과 화면 -->
     <div id="result-screen" class="screen" onclick="resetToStart()">
         <div id="result-text"></div>
         <div class="click-guide">(화면을 터치하면 처음으로 돌아갑니다)</div>
@@ -66,7 +73,6 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <script>
-        // 요청하신 고정 설정값
         const firebaseConfig = {
             apiKey: "AIzaSyAXv0MNJ0d2wmhmdtNmjVi8zJddvRWtNmQ",
             authDomain: "test-1eccc.firebaseapp.com",
@@ -83,9 +89,21 @@
 
         let currentRoundId = 0; 
         let hasVoted = false;   
-        
-        // 🔒 광클 방지용 자물쇠 변수 추가
         let isProcessing = false; 
+
+        // 대기 화면 UI를 내 선택에 맞게 변경해주는 함수
+        function updateWaitingScreenUI(choice) {
+            const waitingScreen = document.getElementById('waiting-screen');
+            const choiceDisplay = document.getElementById('my-choice-display');
+            
+            if (choice === 'A') {
+                waitingScreen.style.backgroundColor = '#ff4d4d'; // A를 누르면 전체가 빨간색으로
+                choiceDisplay.innerText = '나의 선택: A';
+            } else if (choice === 'B') {
+                waitingScreen.style.backgroundColor = '#4da6ff'; // B를 누르면 전체가 파란색으로
+                choiceDisplay.innerText = '나의 선택: B';
+            }
+        }
 
         // 서버 데이터 실시간 감지
         sessionRef.on('value', (snapshot) => {
@@ -98,6 +116,8 @@
             currentRoundId = data.roundId;
 
             const myVotedRound = localStorage.getItem('votedRound');
+            const myChoice = localStorage.getItem('myChoice'); // 로컬에 저장해둔 내 선택 불러오기
+
             if (myVotedRound == currentRoundId) {
                 hasVoted = true;  
             } else {
@@ -111,31 +131,29 @@
             } else {
                 document.getElementById('result-screen').classList.remove('active');
                 if (hasVoted) {
+                    // 대기 화면으로 넘어갈 때 내 선택에 맞게 색상을 칠함
+                    updateWaitingScreenUI(myChoice);
+
                     document.getElementById('vote-screen').classList.remove('active');
                     document.getElementById('waiting-screen').classList.add('active');
                     
-                    // 대기 화면에 왔으니 취소 버튼 자물쇠 풀기
                     document.getElementById('btn-cancel').disabled = false;
                 } else {
                     document.getElementById('waiting-screen').classList.remove('active');
                     document.getElementById('vote-screen').classList.add('active');
                     
-                    // 다시 투표 화면으로 돌아왔으니 투표 버튼 자물쇠 풀기
                     document.getElementById('btn-a').disabled = false;
                     document.getElementById('btn-b').disabled = false;
                 }
             }
             
-            // 서버 통신이 완료되었으므로 자물쇠 해제
             isProcessing = false; 
         });
 
         // 투표하기
         function castVote(choice) {
-            // 이미 투표했거나 자물쇠가 잠겨있으면 클릭 무시 (광클 방어 1단계)
             if (hasVoted || isProcessing) return; 
             
-            // 누르는 즉시 자물쇠 잠그기 (광클 방어 2단계)
             isProcessing = true;
             document.getElementById('btn-a').disabled = true;
             document.getElementById('btn-b').disabled = true;
@@ -144,6 +162,8 @@
             localStorage.setItem('votedRound', currentRoundId);
             localStorage.setItem('myChoice', choice);
 
+            // 누르자마자 UI 업데이트! 색상부터 즉각적으로 바뀜
+            updateWaitingScreenUI(choice);
             document.getElementById('vote-screen').classList.remove('active');
             document.getElementById('waiting-screen').classList.add('active');
 
@@ -161,10 +181,8 @@
 
         // 투표 취소하기
         function cancelVote() {
-            // 자물쇠가 잠겨있으면 클릭 무시 (광클 방어)
             if (!hasVoted || isProcessing) return;
 
-            // 누르는 즉시 자물쇠 잠그기 및 취소 버튼 비활성화
             isProcessing = true;
             document.getElementById('btn-cancel').disabled = true;
 
