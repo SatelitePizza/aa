@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>경주 노래 월드컵 - 투표용</title>
+    <title>경주 노래 월드컵 투표</title>
     <style>
         body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; overflow: hidden; }
         .screen { display: none; height: 100%; width: 100%; text-align: center; }
@@ -43,21 +43,23 @@
         /* 3. 결과 화면 */
         #result-screen { color: white; cursor: pointer; }
         #result-text { font-size: 4rem; font-weight: bold; line-height: 1.2; }
-        .result-detail { font-size: 2rem; font-weight: normal; opacity: 0.9; display: block; margin-top: 10px; }
         .click-guide { font-size: 1rem; margin-top: 30px; opacity: 0.8; font-weight: normal; }
     </style>
 </head>
 <body>
 
+    <!-- 0. 로딩 화면 -->
     <div id="loading-screen" class="screen active">
         <div>상태 확인 중...</div>
     </div>
 
+    <!-- 1. 투표 화면 -->
     <div id="vote-screen" class="screen">
         <button id="btn-a" class="vote-btn" onclick="castVote('A')">A</button>
         <button id="btn-b" class="vote-btn" onclick="castVote('B')">B</button>
     </div>
 
+    <!-- 2. 대기 화면 -->
     <div id="waiting-screen" class="screen">
         <div id="my-choice-display">나의 선택: -</div>
         <div>
@@ -67,6 +69,7 @@
         <button id="btn-cancel" class="cancel-btn" onclick="cancelVote()">투표 취소</button>
     </div>
 
+    <!-- 3. 결과 화면 -->
     <div id="result-screen" class="screen" onclick="resetToStart()">
         <div id="result-text"></div>
         <div class="click-guide">(화면을 터치하면 처음으로 돌아갑니다)</div>
@@ -206,7 +209,7 @@
             });
         }
 
-        // 결과 화면 - 득표수 표시 기능 추가
+        // 결과 화면 (표수 비공개)
         function showResult(votesA, votesB) {
             document.getElementById('vote-screen').classList.remove('active');
             document.getElementById('waiting-screen').classList.remove('active');
@@ -217,16 +220,13 @@
             resultScreen.classList.add('active');
 
             if (votesA > votesB) {
-                // A가 이겼을 때
-                resultText.innerHTML = `A 승리!<span class="result-detail">(${votesA}표 득표)</span>`;
+                resultText.innerText = "A 승리!";
                 resultScreen.style.backgroundColor = "#ff4d4d"; 
             } else if (votesB > votesA) {
-                // B가 이겼을 때
-                resultText.innerHTML = `B 승리!<span class="result-detail">(${votesB}표 득표)</span>`;
+                resultText.innerText = "B 승리!";
                 resultScreen.style.backgroundColor = "#4da6ff"; 
             } else {
-                // 무승부일 때
-                resultText.innerHTML = `무승부<span class="result-detail">(${votesA} : ${votesB})</span>`;
+                resultText.innerText = "무승부";
                 resultScreen.style.backgroundColor = "#999999"; 
             }
         }
